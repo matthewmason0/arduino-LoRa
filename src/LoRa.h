@@ -20,37 +20,18 @@ class LoRaClass : public Stream {
 public:
     LoRaClass();
 
+    // HW config
+    void setPins(uint8_t ss = LORA_DEFAULT_SS_PIN,
+                 uint8_t reset = LORA_DEFAULT_RESET_PIN,
+                 uint8_t dio0 = LORA_DEFAULT_DIO0_PIN);
+    void setSPI(SPIClass& spi) { _spi = &spi; }
+    void setSPIFrequency(uint32_t frequency);
+
+    // initiate / terminate connection with radio
     bool begin(long frequency);
     void end();
 
-    bool beginPacket(int implicitHeader = false);
-    bool endPacket(bool async = false);
-
-    uint8_t parsePacket(uint8_t size = 0);
-    int packetRssi();
-    float packetSnr();
-    long packetFrequencyError();
-
-    int rssi();
-
-    // from Print
-    virtual size_t write(uint8_t byte);
-    virtual size_t write(const uint8_t *buffer, size_t size);
-
-    // from Stream
-    virtual int available();
-    virtual int read();
-    virtual int peek();
-    virtual void flush();
-
-    void onReceive(void(*callback)(uint8_t));
-    void onTxDone(void(*callback)());
-
-    void continuousRx(uint8_t size = 0);
-    void singleRx();
-    void idle();
-    void sleep();
-
+    // radio config
     void setTxPower(uint8_t level, uint8_t outputPin = PA_OUTPUT_PA_BOOST_PIN);
     void setFrequency(long frequency);
     void setSpreadingFactor(uint8_t sf);
@@ -62,44 +43,61 @@ public:
     void disableCrc();
     void enableInvertIQ();
     void disableInvertIQ();
+    void setOCP(uint8_t mA);
+    void setGain(uint8_t gain);
 
-    void setOCP(uint8_t mA); // Over Current Protection control
+    // radio modes
+    void continuousRx(uint8_t size = 0);
+    void singleRx();
+    void idle();
+    void sleep();
 
-    void setGain(uint8_t gain); // Set LNA gain
+    // TX
+    void beginPacket(int implicitHeader = false);
+    virtual size_t write(uint8_t byte);
+    virtual size_t write(const uint8_t *buffer, size_t size);
+    void endPacket(bool async = false);
 
-    // deprecated
-    void crc() { enableCrc(); }
-    void noCrc() { disableCrc(); }
+    // RX
+    virtual int available();
+    virtual int read();
+    virtual int peek();
+    virtual void flush() {}
+    int packetRssi();
+    float packetSnr();
+    long packetFrequencyError();
 
+    // other functionality
+    int rssi();
     uint8_t random();
+    void onRxDone(void(*callback)(uint8_t)) { _onRxDone = callback; }
+    void onTxDone(void(*callback)()) { _onTxDone = callback; }
 
-    void setPins(uint8_t ss = LORA_DEFAULT_SS_PIN, uint8_t reset = LORA_DEFAULT_RESET_PIN, uint8_t dio0 = LORA_DEFAULT_DIO0_PIN);
-    void setSPI(SPIClass& spi);
-    void setSPIFrequency(uint32_t frequency);
-
+    // debug
     void dumpRegisters(Stream& out);
     void debug();
 
 private:
-    void explicitHeaderMode();
-    void implicitHeaderMode();
-
-    void handleDio0Rise();
-    // bool isTransmitting();
-    void resetFifo();
-
+    // get radio config
     uint8_t getSpreadingFactor();
     long getSignalBandwidth();
 
+    // set radio config
+    void explicitHeaderMode();
+    void implicitHeaderMode();
     void setLdoFlag();
+    void resetFifo();
 
+    // ISR
+    static void onDio0Rise();
+    void handleDio0Rise();
+
+    // SPI
     uint8_t readRegister(uint8_t address);
     void writeRegister(uint8_t address, uint8_t value);
     uint8_t singleTransfer(uint8_t address, uint8_t value);
 
-    static void onDio0Rise();
-
-private:
+    // member vars
     SPISettings _spiSettings;
     SPIClass* _spi;
     uint8_t _ss;
@@ -110,7 +108,7 @@ private:
     volatile bool _transmitting;
     volatile uint8_t _packetIndex;
     volatile uint8_t _available;
-    void (*_onReceive)(uint8_t);
+    void (*_onRxDone)(uint8_t);
     void (*_onTxDone)();
 };
 
