@@ -16,6 +16,7 @@
 #define REG_FIFO_TX_BASE_ADDR    0x0e
 #define REG_FIFO_RX_BASE_ADDR    0x0f
 #define REG_FIFO_RX_CURRENT_ADDR 0x10
+#define REG_IRQ_FLAGS_MASK       0x11
 #define REG_IRQ_FLAGS            0x12
 #define REG_RX_NB_BYTES          0x13
 #define REG_PKT_SNR_VALUE        0x19
@@ -51,8 +52,14 @@
 // PA config
 #define PA_BOOST 0x80
 
+// DIO mapping
+#define DIO0_RX_DONE      0x00
+#define DIO0_TX_DONE      0x40
+#define DIO3_VALID_HEADER 0x01
+
 // IRQ masks
 #define IRQ_TX_DONE_MASK           0x08
+#define IRQ_VALID_HEADER_MASK      0x10
 #define IRQ_PAYLOAD_CRC_ERROR_MASK 0x20
 #define IRQ_RX_DONE_MASK           0x40
 
@@ -101,7 +108,7 @@ void LoRaClass::setSPIFrequency(uint32_t frequency)
     _spiSettings = SPISettings(frequency, MSBFIRST, SPI_MODE0);
 }
 
-bool LoRaClass::begin(long frequency)
+bool LoRaClass::begin(long frequency, uint8_t txPower)
 {
     // setup pins
     pinMode(_ss, OUTPUT);
@@ -140,14 +147,20 @@ bool LoRaClass::begin(long frequency)
     writeRegister(REG_FIFO_TX_BASE_ADDR, 0);
     writeRegister(REG_FIFO_RX_BASE_ADDR, 0);
 
+    // set IRQ mask
+    writeRegister(REG_IRQ_FLAGS_MASK, ~(IRQ_TX_DONE_MASK &
+                                        IRQ_VALID_HEADER_MASK &
+                                        IRQ_PAYLOAD_CRC_ERROR_MASK &
+                                        IRQ_RX_DONE_MASK));
+
     // set LNA boost
     writeRegister(REG_LNA, readRegister(REG_LNA) | 0x03);
 
     // set auto AGC
     writeRegister(REG_MODEM_CONFIG_3, 0x04);
 
-    // set output power to 17 dBm
-    setTxPower(17);
+    // set output power
+    setTxPower(txPower);
 
     // put in standby mode
     idle();
@@ -355,7 +368,7 @@ void LoRaClass::continuousRx(uint8_t size)
     while (_transmitting)
         yield();
 
-    writeRegister(REG_DIO_MAPPING_1, 0x00); // DIO0 => RXDONE
+    writeRegister(REG_DIO_MAPPING_1, DIO0_RX_DONE & DIO3_VALID_HEADER);
 
     if (size > 0)
     {
@@ -379,7 +392,7 @@ void LoRaClass::singleRx()
         // reset FIFO address
         resetFifo();
 
-        writeRegister(REG_DIO_MAPPING_1, 0x00); // DIO0 => RXDONE
+        writeRegister(REG_DIO_MAPPING_1, DIO0_RX_DONE & DIO3_VALID_HEADER);
 
         // put in single RX mode
         writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_RX_SINGLE);
@@ -440,7 +453,7 @@ size_t LoRaClass::write(const uint8_t *buffer, size_t size)
 
 void LoRaClass::endPacket(bool blocking)
 {
-    writeRegister(REG_DIO_MAPPING_1, 0x40); // DIO0 => TXDONE
+    writeRegister(REG_DIO_MAPPING_1, DIO0_TX_DONE & DIO3_VALID_HEADER);
 
     // put in TX mode
     writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_TX);
@@ -521,6 +534,27 @@ int LoRaClass::rssi()
 uint8_t LoRaClass::random()
 {
     return readRegister(REG_RSSI_WIDEBAND);
+}
+
+void LoRaClass::onValidHeader(void(*callback)(), uint8_t dio3)
+{
+    _onValidHeader = callback;
+
+    if (_onValidHeader) // setup DIO3 and attach ISR
+    {
+        pinMode(dio3, INPUT);
+#ifdef SPI_HAS_NOTUSINGINTERRUPT
+        SPI.usingInterrupt(digitalPinToInterrupt(dio3));
+#endif
+        attachInterrupt(digitalPinToInterrupt(dio3), LoRaClass::onDio3Rise, RISING);
+    }
+    else // detach ISR
+    {
+        detachInterrupt(digitalPinToInterrupt(dio3));
+#ifdef SPI_HAS_NOTUSINGINTERRUPT
+        SPI.notUsingInterrupt(digitalPinToInterrupt(dio3));
+#endif
+    }
 }
 
 void LoRaClass::dumpRegisters(Stream& out)
@@ -613,7 +647,7 @@ void LoRaClass::handleDio0Rise()
     // Serial.print("---- IRQ: "); Serial.println(irqFlags, BIN);
 
     // clear IRQ's
-    writeRegister(REG_IRQ_FLAGS, irqFlags);
+    writeRegister(REG_IRQ_FLAGS, IRQ_TX_DONE_MASK & IRQ_PAYLOAD_CRC_ERROR_MASK & IRQ_RX_DONE_MASK);
 
     if (irqFlags & IRQ_TX_DONE_MASK)
     {
@@ -634,6 +668,26 @@ void LoRaClass::handleDio0Rise()
 
         if (_onRxDone)
             _onRxDone(_available);
+    }
+}
+
+ISR_PREFIX void LoRaClass::onDio3Rise()
+{
+    LoRa.handleDio3Rise();
+}
+
+void LoRaClass::handleDio3Rise()
+{
+    uint8_t irqFlags = readRegister(REG_IRQ_FLAGS);
+    // Serial.print("---- IRQ: "); Serial.println(irqFlags, BIN);
+
+    // clear IRQ's
+    writeRegister(REG_IRQ_FLAGS, IRQ_VALID_HEADER_MASK);
+
+    if (irqFlags & IRQ_VALID_HEADER_MASK)
+    {
+        if (_onValidHeader)
+            _onValidHeader();
     }
 }
 

@@ -28,7 +28,7 @@ public:
     void setSPIFrequency(uint32_t frequency);
 
     // initiate / terminate connection with radio
-    bool begin(long frequency);
+    bool begin(long frequency, uint8_t txPower);
     void end();
 
     // radio config
@@ -70,6 +70,7 @@ public:
     // other functionality
     int rssi();
     uint8_t random();
+    void onValidHeader(void(*callback)(), uint8_t dio3 = 0);
     void onRxDone(void(*callback)(uint8_t)) { _onRxDone = callback; }
     void onTxDone(void(*callback)()) { _onTxDone = callback; }
 
@@ -91,6 +92,8 @@ private:
     // ISR
     static void onDio0Rise();
     void handleDio0Rise();
+    static void onDio3Rise();
+    void handleDio3Rise();
 
     // SPI
     uint8_t readRegister(uint8_t address);
@@ -108,6 +111,7 @@ private:
     volatile bool _transmitting;
     volatile uint8_t _packetIndex;
     volatile uint8_t _available;
+    void (*_onValidHeader)();
     void (*_onRxDone)(uint8_t);
     void (*_onTxDone)();
 };
