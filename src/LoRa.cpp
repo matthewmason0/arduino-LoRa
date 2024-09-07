@@ -89,6 +89,7 @@ LoRaClass::LoRaClass() :
     _transmitting(false),
     _packetIndex(0),
     _available(0),
+    _onValidHeader(NULL),
     _onRxDone(NULL),
     _onTxDone(NULL)
 {
@@ -132,10 +133,8 @@ bool LoRaClass::begin(long frequency, uint8_t txPower)
     _spi->begin();
 
     // check version
-    uint8_t version = readRegister(REG_VERSION);
-    if (version != 0x12) {
+    if (readRegister(REG_VERSION) != 0x12)
         return 0;
-    }
 
     // put in sleep mode
     sleep();
