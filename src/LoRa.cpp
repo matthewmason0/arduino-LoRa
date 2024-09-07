@@ -58,10 +58,10 @@
 #define DIO3_VALID_HEADER 0x01
 
 // IRQ masks
-#define IRQ_TX_DONE_MASK           0x08
-#define IRQ_VALID_HEADER_MASK      0x10
-#define IRQ_PAYLOAD_CRC_ERROR_MASK 0x20
-#define IRQ_RX_DONE_MASK           0x40
+#define MASK_IRQ_TX_DONE           0x08
+#define MASK_IRQ_VALID_HEADER      0x10
+#define MASK_IRQ_PAYLOAD_CRC_ERROR 0x20
+#define MASK_IRQ_RX_DONE           0x40
 
 // RF
 #define RF_MID_BAND_THRESHOLD 525E6
@@ -146,11 +146,11 @@ bool LoRaClass::begin(long frequency, uint8_t txPower)
     writeRegister(REG_FIFO_TX_BASE_ADDR, 0);
     writeRegister(REG_FIFO_RX_BASE_ADDR, 0);
 
-    // set IRQ mask
-    writeRegister(REG_IRQ_FLAGS_MASK, ~(IRQ_TX_DONE_MASK &
-                                        IRQ_VALID_HEADER_MASK &
-                                        IRQ_PAYLOAD_CRC_ERROR_MASK &
-                                        IRQ_RX_DONE_MASK));
+    // disable unused IRQs
+    writeRegister(REG_IRQ_FLAGS_MASK, ~(MASK_IRQ_TX_DONE |
+                                        MASK_IRQ_VALID_HEADER |
+                                        MASK_IRQ_PAYLOAD_CRC_ERROR |
+                                        MASK_IRQ_RX_DONE));
 
     // set LNA boost
     writeRegister(REG_LNA, readRegister(REG_LNA) | 0x03);
@@ -367,7 +367,7 @@ void LoRaClass::continuousRx(uint8_t size)
     while (_transmitting)
         yield();
 
-    writeRegister(REG_DIO_MAPPING_1, DIO0_RX_DONE & DIO3_VALID_HEADER);
+    writeRegister(REG_DIO_MAPPING_1, DIO0_RX_DONE | DIO3_VALID_HEADER);
 
     if (size > 0)
     {
@@ -391,7 +391,7 @@ void LoRaClass::singleRx()
         // reset FIFO address
         resetFifo();
 
-        writeRegister(REG_DIO_MAPPING_1, DIO0_RX_DONE & DIO3_VALID_HEADER);
+        writeRegister(REG_DIO_MAPPING_1, DIO0_RX_DONE | DIO3_VALID_HEADER);
 
         // put in single RX mode
         writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_RX_SINGLE);
@@ -452,7 +452,7 @@ size_t LoRaClass::write(const uint8_t *buffer, size_t size)
 
 void LoRaClass::endPacket(bool blocking)
 {
-    writeRegister(REG_DIO_MAPPING_1, DIO0_TX_DONE & DIO3_VALID_HEADER);
+    writeRegister(REG_DIO_MAPPING_1, DIO0_TX_DONE | DIO3_VALID_HEADER);
 
     // put in TX mode
     writeRegister(REG_OP_MODE, MODE_LONG_RANGE_MODE | MODE_TX);
@@ -646,15 +646,15 @@ void LoRaClass::handleDio0Rise()
     // Serial.print("---- IRQ: "); Serial.println(irqFlags, BIN);
 
     // clear IRQ's
-    writeRegister(REG_IRQ_FLAGS, IRQ_TX_DONE_MASK & IRQ_PAYLOAD_CRC_ERROR_MASK & IRQ_RX_DONE_MASK);
+    writeRegister(REG_IRQ_FLAGS, MASK_IRQ_TX_DONE & MASK_IRQ_PAYLOAD_CRC_ERROR & MASK_IRQ_RX_DONE);
 
-    if (irqFlags & IRQ_TX_DONE_MASK)
+    if (irqFlags & MASK_IRQ_TX_DONE)
     {
         _transmitting = false;
         if (_onTxDone)
             _onTxDone();
     }
-    else if ((irqFlags & IRQ_RX_DONE_MASK) && !(irqFlags & IRQ_PAYLOAD_CRC_ERROR_MASK))
+    else if ((irqFlags & MASK_IRQ_RX_DONE) && !(irqFlags & MASK_IRQ_PAYLOAD_CRC_ERROR))
     {
         // received a packet
         _packetIndex = 0;
@@ -681,9 +681,9 @@ void LoRaClass::handleDio3Rise()
     // Serial.print("---- IRQ: "); Serial.println(irqFlags, BIN);
 
     // clear IRQ's
-    writeRegister(REG_IRQ_FLAGS, IRQ_VALID_HEADER_MASK);
+    writeRegister(REG_IRQ_FLAGS, MASK_IRQ_VALID_HEADER);
 
-    if (irqFlags & IRQ_VALID_HEADER_MASK)
+    if (irqFlags & MASK_IRQ_VALID_HEADER)
     {
         if (_onValidHeader)
             _onValidHeader();

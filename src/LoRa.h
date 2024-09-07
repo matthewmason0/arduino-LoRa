@@ -56,7 +56,7 @@ public:
     void beginPacket(int implicitHeader = false);
     virtual size_t write(uint8_t byte);
     virtual size_t write(const uint8_t *buffer, size_t size);
-    void endPacket(bool async = false);
+    void endPacket(bool blocking = false);
 
     // RX
     virtual int available();
