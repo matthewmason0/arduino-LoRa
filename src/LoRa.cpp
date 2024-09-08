@@ -646,7 +646,7 @@ void LoRaClass::handleDio0Rise()
     // Serial.print("---- IRQ: "); Serial.println(irqFlags, BIN);
 
     // clear IRQ's
-    writeRegister(REG_IRQ_FLAGS, MASK_IRQ_TX_DONE & MASK_IRQ_PAYLOAD_CRC_ERROR & MASK_IRQ_RX_DONE);
+    writeRegister(REG_IRQ_FLAGS, MASK_IRQ_TX_DONE | MASK_IRQ_PAYLOAD_CRC_ERROR | MASK_IRQ_RX_DONE);
 
     if (irqFlags & MASK_IRQ_TX_DONE)
     {
