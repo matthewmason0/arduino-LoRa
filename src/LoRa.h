@@ -66,6 +66,7 @@ public:
     int packetRssi();
     float packetSnr();
     long packetFrequencyError();
+    bool validSignalDetected();
 
     // other functionality
     int rssi();

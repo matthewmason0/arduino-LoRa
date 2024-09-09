@@ -19,6 +19,7 @@
 #define REG_IRQ_FLAGS_MASK       0x11
 #define REG_IRQ_FLAGS            0x12
 #define REG_RX_NB_BYTES          0x13
+#define REG_MODEM_STAT           0x18
 #define REG_PKT_SNR_VALUE        0x19
 #define REG_PKT_RSSI_VALUE       0x1a
 #define REG_RSSI_VALUE           0x1b
@@ -62,6 +63,13 @@
 #define MASK_IRQ_VALID_HEADER      0x10
 #define MASK_IRQ_PAYLOAD_CRC_ERROR 0x20
 #define MASK_IRQ_RX_DONE           0x40
+
+// modem status masks
+#define MASK_MODEM_VALID_SIGNAL 0x01
+#define MASK_MODEM_SYNCED       0x02
+#define MASK_MODEM_RX_ACTIVE    0x04
+#define MASK_MODEM_VALID_HEADER 0x08
+#define MASK_MODEM_CLEAR        0x10
 
 // RF
 #define RF_MID_BAND_THRESHOLD 525E6
@@ -525,6 +533,11 @@ long LoRaClass::packetFrequencyError()
     return static_cast<long>(fError);
 }
 
+bool LoRaClass::validSignalDetected()
+{
+    return readRegister(REG_MODEM_STAT) & MASK_MODEM_VALID_SIGNAL;
+}
+
 int LoRaClass::rssi()
 {
     return readRegister(REG_RSSI_VALUE) - (_frequency < RF_MID_BAND_THRESHOLD ? RSSI_OFFSET_LF_PORT : RSSI_OFFSET_HF_PORT);
@@ -569,7 +582,7 @@ void LoRaClass::dumpRegisters(Stream& out)
 
 void LoRaClass::debug()
 {
-    Serial.print("mode: "); Serial.print(readRegister(REG_OP_MODE), BIN); Serial.print(" status: "); Serial.println(readRegister(0x18), BIN);
+    Serial.print("mode: "); Serial.print(readRegister(REG_OP_MODE), BIN); Serial.print(" status: "); Serial.println(readRegister(REG_MODEM_STAT), BIN);
 }
 
 //******************************************************************************
