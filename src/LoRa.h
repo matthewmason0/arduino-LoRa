@@ -57,6 +57,7 @@ public:
     virtual size_t write(uint8_t byte);
     virtual size_t write(const uint8_t *buffer, size_t size);
     void endPacket(bool blocking = false);
+    bool isTransmitting() { return _transmitting; }
 
     // RX
     virtual int available();
